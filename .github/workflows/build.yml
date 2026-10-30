@@ -1,0 +1,51 @@
+name: Build DSH iOS IPA
+
+on:
+  workflow_dispatch: # 支持手动触发
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    # 使用最新的 macOS runner，通常已预装 Xcode
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive # 确保拉取子模块
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20' # 确保 Node 版本 >= 20
+
+    - name: Install build dependencies
+      run: |
+        brew install meson ninja
+        gem install xcodeproj
+
+    - name: Build emulator and rootfs
+      run: |
+        make emulator
+        make rootfs
+
+    - name: Build iOS App Archive
+      run: |
+        # 关键：禁用代码签名，生成未签名的 archive
+        xcodebuild -project DSH.xcodeproj -scheme DSH -configuration Release -destination 'generic/platform=iOS' -archivePath ./build/DSH.xcarchive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+    - name: Package Unsigned IPA
+      run: |
+        # 从 xcarchive 中提取 .app 并打包成标准的 Payload 结构
+        mkdir -p ./build/Payload
+        cp -r ./build/DSH.xcarchive/Products/Applications/DSH.app ./build/Payload/
+        cd ./build
+        zip -r DSH-unsigned.ipa Payload
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DSH-unsigned-ipa
+        path: ./build/DSH-unsigned.ipa
