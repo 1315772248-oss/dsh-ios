@@ -1,0 +1,53 @@
+name: Build DSH iOS IPA
+
+on:
+  workflow_dispatch: # 支持在 Actions 页面手动点击触发
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    # 改用受支持的 macOS 15 原生 ARM64 运行器，避开已退役的 macos-14
+    runs-on: macos-15 
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install build dependencies
+      run: |
+        brew install meson ninja lld
+        echo "$(brew --prefix lld)/bin" >> $GITHUB_PATH
+        gem install xcodeproj
+
+    - name: Build emulator and rootfs
+      run: |
+        set -ex
+        make emulator
+        make rootfs
+
+    - name: Build iOS App Archive
+      run: |
+        xcodebuild -project DSH.xcodeproj -scheme DSH -configuration Release -destination 'generic/platform=iOS' -archivePath ./build/DSH.xcarchive CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO
+
+    - name: Package Unsigned IPA
+      run: |
+        mkdir -p ./build/Payload
+        cp -r ./build/DSH.xcarchive/Products/Applications/DSH.app ./build/Payload/
+        cd ./build
+        zip -r DSH-unsigned.ipa Payload
+
+    - name: Upload IPA Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DSH-unsigned-ipa
+        path: ./build/DSH-unsigned.ipa
