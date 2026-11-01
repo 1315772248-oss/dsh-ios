@@ -50,16 +50,24 @@ jobs:
             -archivePath build/DSH.xcarchive \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
+            DSH_DEVELOPMENT_TEAM="" \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Package into IPA
         run: |
+          set -euo pipefail
+          APP="build/DSH.xcarchive/Products/Applications/DSH.app"
+          test -d "$APP"
+          test ! -e "$APP/_CodeSignature"
+          test ! -e "$APP/embedded.mobileprovision"
+          rm -rf build/Payload build/DSH-unsigned.ipa
           mkdir -p build/Payload
-          cp -R build/DSH.xcarchive/Products/Applications/DSH.app build/Payload/
+          cp -R "$APP" build/Payload/
           cd build
           zip -qr DSH-unsigned.ipa Payload
+          unzip -tq DSH-unsigned.ipa
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
