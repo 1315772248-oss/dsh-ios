@@ -1,11 +1,14 @@
-name: Build DSHIOS (Intel Fallback)
+name: Build DSHIOS (macOS 26 & Node 22)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-13 # 强制使用 Intel 芯片运行器
+    runs-on: macos-26
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -17,10 +20,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Xcode
+      - name: Setup Xcode 26
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.0' # Intel 运行器通常最高支持 Xcode 15
+          xcode-version: '26.6'
 
       - name: Install Dependencies
         run: |
@@ -30,7 +33,12 @@ jobs:
       - name: Build Rootfs
         run: |
           export PKG_CONFIG_PATH="$(brew --prefix libarchive)/lib/pkgconfig"
+          
           rm -rf ish-arm64/build-arm64-release
+          if [ -d "ish-arm64" ]; then
+            cd ish-arm64 && make clean 2>/dev/null || true && cd ..
+          fi
+          
           make rootfs
 
       - name: Build and Archive (Unsigned)
