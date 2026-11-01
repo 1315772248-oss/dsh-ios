@@ -1,39 +1,44 @@
-name: Build Unsigned DSHIOS IPA (macOS 15 Fixed)
+name: Build DSHIOS (macOS 15 & Node 22)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-15 # 使用最新的 macOS 15 运行器
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           submodules: recursive
 
+      # 明确指定使用 Node.js 22
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '26.3'
+          # macOS-15 默认支持 Xcode 16，这里指定以确保兼容
+          xcode-version: '16.0'
 
       - name: Install Dependencies
         run: |
-          brew install pkg-config libarchive meson ninja
+          # 安装构建所需的所有 Homebrew 依赖，包括 lld
+          brew install pkg-config libarchive meson ninja lld
+          # 将 lld 加入 PATH，解决 ld.lld not found 的问题
+          echo "$(brew --prefix lld)/bin" >> $GITHUB_PATH
 
-      # 关键修复：直接在 make rootfs 时内联环境变量，并强制清理旧构建
       - name: Build Rootfs
         run: |
+          # 解决 fakefsify 找不到 libarchive 的问题
           export PKG_CONFIG_PATH="$(brew --prefix libarchive)/lib/pkgconfig"
-          echo "PKG_CONFIG_PATH is: $PKG_CONFIG_PATH"
-          
-          # 验证是否能找到 libarchive
-          pkg-config --modversion libarchive
-          
-          # 强制彻底清理，避免 meson 缓存导致重新配置失败
           rm -rf ish-arm64/build-arm64-release
-          
-          # 执行 rootfs 构建
           make rootfs
 
       - name: Build and Archive (Unsigned)
